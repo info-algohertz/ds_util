@@ -6,27 +6,20 @@ use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use parquet::file::reader::{FileReader, SerializedFileReader};
 
 pub trait DataFrame: Send + Sync {
-    /// (rows, cols)
     fn shape(&self) -> (usize, usize);
-    /// Column names in order
     fn column_names(&self) -> Vec<String>;
-    /// Column types as debug strings (Arrow dtypes) by name
     fn column_types(&self) -> HashMap<String, String>;
 }
 
-/// Metadata-only constructor from Parquet:
-/// - Row count from Parquet footer (sum of row-group rows)
-/// - Arrow schema via reader builder (reads schema, not data pages)
 pub fn read_parquet(path: &str) -> Result<Box<dyn DataFrame>, Box<dyn std::error::Error>> {
-    // 1) Row count from footer metadata (no data pages)
     let file = File::open(path)?;
+    let file_for_schema = file.try_clone()?;
+
     let reader = SerializedFileReader::new(file)?;
     let meta = reader.metadata();
     let total_rows = meta.file_metadata().num_rows() as usize;
 
-    // 2) Arrow schema (no data pages)
-    //    Using a fresh File; builder only inspects schema/metadata.
-    let arrow_schema: SchemaRef = ParquetRecordBatchReaderBuilder::try_new(File::open(path)?)?
+    let arrow_schema: SchemaRef = ParquetRecordBatchReaderBuilder::try_new(file_for_schema)?
         .schema()
         .clone();
 
