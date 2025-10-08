@@ -22,11 +22,7 @@ pub fn read_parquet(path: &str) -> Result<Box<dyn DataFrame>, Box<dyn std::error
     let file = File::open(path)?;
     let reader = SerializedFileReader::new(file)?;
     let meta = reader.metadata();
-    let total_rows: usize = meta
-        .row_groups()
-        .iter()
-        .map(|rg| rg.num_rows() as usize)
-        .sum();
+    let total_rows = meta.file_metadata().num_rows() as usize;
 
     // 2) Arrow schema (no data pages)
     //    Using a fresh File; builder only inspects schema/metadata.

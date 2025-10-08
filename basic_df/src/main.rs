@@ -1,5 +1,5 @@
 /* Example usage:
-   cargo run -- path/to/file.parquet
+   cargo run -- $HOME/data.parquet
 */
 use std::env;
 
