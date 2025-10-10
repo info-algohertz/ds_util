@@ -13,11 +13,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let df = basic_df::read_parquet(&path)?;  // note: &path and ?
+    let df = basic_df::read_parquet(&path)?;
 
     println!("shape   : {:?}", df.shape());
     println!("names   : {:?}", df.column_names());
     println!("types   : {:?}", df.column_types());
+
+    let v = df.read_column_f64("consumption_10006_kwh");
+    dbg!(&v[0..10]);
 
     Ok(())
 }
