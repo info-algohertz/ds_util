@@ -21,6 +21,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let v = df.read_column_f64("consumption_10006_kwh");
     dbg!(&v[0..10]);
+    
+    let index = df.read_index_microsecond();
+    dbg!(&index[0..10]);
 
     Ok(())
 }

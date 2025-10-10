@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fs::File;
 
-use arrow::array::Float64Array;
+use arrow::array::{Array, Float64Array};
 use arrow::datatypes::SchemaRef;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use parquet::file::reader::{FileReader, SerializedFileReader};
@@ -10,7 +10,12 @@ pub trait DataFrame: Send + Sync {
     fn shape(&self) -> (usize, usize);
     fn column_names(&self) -> Vec<String>;
     fn column_types(&self) -> HashMap<String, String>;
+
+    /// Read a Float64 column into Vec<f64>, replacing NULL with NaN
     fn read_column_f64(&self, column_name: &str) -> Vec<f64>;
+
+    /// Read the first column (index) of type Timestamp(Microsecond, Some("UTC")) into Vec<i64>
+    fn read_index_microsecond(&self) -> Vec<i64>;
 }
 
 pub fn read_parquet(path: &str) -> Result<Box<dyn DataFrame>, Box<dyn std::error::Error>> {
@@ -25,24 +30,17 @@ pub fn read_parquet(path: &str) -> Result<Box<dyn DataFrame>, Box<dyn std::error
         .schema()
         .clone();
 
-    // FIX: use `::new`, not `.new`
-    Ok(Box::new(ArrowDataFrame::new(
-        path.to_string(),
-        arrow_schema,
+    Ok(Box::new(ArrowDataFrame {
+        path: path.to_string(),
+        schema: arrow_schema,
         row_count,
-    )))
+    }))
 }
 
 struct ArrowDataFrame {
     path: String,
     schema: SchemaRef,
     row_count: usize,
-}
-
-impl ArrowDataFrame {
-    fn new(path: String, schema: SchemaRef, row_count: usize) -> Self {
-        Self { path, schema, row_count }
-    }
 }
 
 impl DataFrame for ArrowDataFrame {
@@ -67,7 +65,6 @@ impl DataFrame for ArrowDataFrame {
     }
 
     fn read_column_f64(&self, column_name: &str) -> Vec<f64> {
-        let column_name_string = column_name.to_string();
         let file = File::open(&self.path)
             .unwrap_or_else(|e| panic!("failed to open parquet file '{}': {e}", self.path));
         let builder = ParquetRecordBatchReaderBuilder::try_new(file)
@@ -82,16 +79,15 @@ impl DataFrame for ArrowDataFrame {
 
             let idx = batch
                 .schema()
-                .index_of(&column_name_string)
-                .unwrap_or_else(|_| panic!("column '{}' not found in batch", column_name_string));
+                .index_of(column_name)
+                .unwrap_or_else(|_| panic!("column '{}' not found in batch", column_name));
 
             let col = batch
                 .column(idx)
                 .as_any()
                 .downcast_ref::<Float64Array>()
-                .unwrap_or_else(|| panic!("column '{}' is not Float64", column_name_string));
+                .unwrap_or_else(|| panic!("column '{}' is not Float64", column_name));
 
-            // Map NULL -> NaN
             for opt in col.iter() {
                 values.push(opt.unwrap_or(f64::NAN));
             }
@@ -99,5 +95,71 @@ impl DataFrame for ArrowDataFrame {
 
         values
     }
-}
 
+    fn read_index_microsecond(&self) -> Vec<i64> {
+        use arrow::array::TimestampMicrosecondArray;
+        use arrow::datatypes::{DataType, TimeUnit};
+
+        const INDEX_NAME: &str = "__index_level_0__";
+
+        let file = File::open(&self.path)
+            .unwrap_or_else(|e| panic!("failed to open parquet file '{}': {e}", self.path));
+
+        // No need for `mut` here either
+        let builder = ParquetRecordBatchReaderBuilder::try_new(file)
+            .unwrap_or_else(|e| panic!("failed to build parquet reader: {e}"));
+        let mut reader = builder
+            .build()
+            .unwrap_or_else(|e| panic!("failed to build record batch reader: {e}"));
+
+        let mut values: Vec<i64> = Vec::with_capacity(self.row_count);
+        let mut global_row: usize = 0;
+
+        while let Some(batch_res) = reader.next() {
+            let batch = batch_res.unwrap_or_else(|e| panic!("error reading batch: {e}"));
+
+            // FIX: hold the schema in a local binding so the &Field borrow is valid
+            let schema = batch.schema();
+            let idx = schema
+                .index_of(INDEX_NAME)
+                .unwrap_or_else(|_| panic!("index column '{}' not found", INDEX_NAME));
+
+            // Validate dtype once per batch
+            let field = schema.field(idx);
+            match field.data_type() {
+                DataType::Timestamp(TimeUnit::Microsecond, tz) if tz.as_deref() == Some("UTC") => {}
+                other => panic!(
+                    "index column '{}' has dtype {:?}, expected Timestamp(Microsecond, Some(\"UTC\"))",
+                    INDEX_NAME, other
+                ),
+            }
+
+            let col = batch
+                .column(idx)
+                .as_any()
+                .downcast_ref::<TimestampMicrosecondArray>()
+                .unwrap_or_else(|| {
+                    panic!(
+                        "index column '{}' is not a TimestampMicrosecondArray",
+                        INDEX_NAME
+                    )
+                });
+
+            for (j, opt) in col.iter().enumerate() {
+                let ts = opt.unwrap_or_else(|| {
+                    panic!(
+                        "index column '{}' contains a NULL at row {}",
+                        INDEX_NAME,
+                        global_row + j
+                    )
+                });
+                values.push(ts);
+            }
+
+            global_row += col.len();
+        }
+
+        values
+    }
+
+}
