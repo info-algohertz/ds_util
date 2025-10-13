@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("names   : {:?}", df.column_names());
     println!("types   : {:?}", df.column_types());
 
-    let v = df.read_column_f64("consumption_10006_kwh");
+    let v = df.read_column_f64(&df.column_names()[0]);
     dbg!(&v[0..10]);
 
     let index = df.read_index_microsecond();
