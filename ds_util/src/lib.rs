@@ -54,6 +54,7 @@ impl DataFrame for ArrowDataFrame {
         self.schema
             .fields()
             .iter()
+            .filter(|f| f.name() != INDEX_NAME)
             .map(|f| f.name().to_string())
             .collect()
     }
