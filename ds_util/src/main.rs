@@ -11,7 +11,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = match args.next() {
         Some(p) => p,
         None => {
-            eprintln!("Usage: basic_df <path_to.parquet>");
+            eprintln!("Usage: ds_util <path_to.parquet>");
             return Ok(());
         }
     };
