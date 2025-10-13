@@ -72,7 +72,8 @@ impl DataFrame for ArrowDataFrame {
             .unwrap_or_else(|e| panic!("failed to open parquet file '{}': {e}", self.path));
         let builder = ParquetRecordBatchReaderBuilder::try_new(file)
             .unwrap_or_else(|e| panic!("failed to build parquet reader: {e}"));
-        let mut reader = builder.build()
+        let mut reader = builder
+            .build()
             .unwrap_or_else(|e| panic!("failed to build record batch reader: {e}"));
 
         let mut values: Vec<f64> = Vec::with_capacity(self.row_count);
@@ -162,5 +163,4 @@ impl DataFrame for ArrowDataFrame {
 
         values
     }
-
 }
