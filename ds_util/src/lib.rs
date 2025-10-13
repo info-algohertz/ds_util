@@ -6,6 +6,8 @@ use arrow::datatypes::SchemaRef;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use parquet::file::reader::{FileReader, SerializedFileReader};
 
+const INDEX_NAME: &str = "__index_level_0__";
+
 pub trait DataFrame: Send + Sync {
     fn shape(&self) -> (usize, usize);
     fn column_names(&self) -> Vec<String>;
@@ -99,8 +101,6 @@ impl DataFrame for ArrowDataFrame {
     fn read_index_microsecond(&self) -> Vec<i64> {
         use arrow::array::TimestampMicrosecondArray;
         use arrow::datatypes::{DataType, TimeUnit};
-
-        const INDEX_NAME: &str = "__index_level_0__";
 
         let file = File::open(&self.path)
             .unwrap_or_else(|e| panic!("failed to open parquet file '{}': {e}", self.path));
