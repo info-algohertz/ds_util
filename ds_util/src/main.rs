@@ -1,6 +1,9 @@
-/* Example usage:
+/* Examples using ds_util functions
+
+   Example usage:
    cargo run -- $HOME/data.parquet
 */
+
 use std::env;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -13,7 +16,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let df = basic_df::read_parquet(&path)?;
+    let df = ds_util::read_parquet(&path)?;
 
     println!("shape   : {:?}", df.shape());
     println!("names   : {:?}", df.column_names());
@@ -21,7 +24,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let v = df.read_column_f64("consumption_10006_kwh");
     dbg!(&v[0..10]);
-    
+
     let index = df.read_index_microsecond();
     dbg!(&index[0..10]);
 
