@@ -164,3 +164,35 @@ impl DataFrame for ArrowDataFrame {
         values
     }
 }
+
+pub fn get_percentile(values: &[f64], percentile: f64) -> f64 {
+    assert!(
+        (0.0..=100.0).contains(&percentile),
+        "Percentile must be between 0 and 100."
+    );
+
+    // Filter out NaNs
+    let mut filtered: Vec<f64> = values.iter().copied().filter(|v| !v.is_nan()).collect();
+
+    if filtered.is_empty() {
+        return f64::NAN;
+    }
+
+    filtered.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let n = filtered.len();
+
+    if n == 1 {
+        return filtered[0];
+    }
+
+    let rank = percentile / 100.0 * (n as f64 - 1.0);
+    let lower = rank.floor() as usize;
+    let upper = rank.ceil() as usize;
+
+    if lower == upper {
+        filtered[lower]
+    } else {
+        let weight = rank - lower as f64;
+        filtered[lower] * (1.0 - weight) + filtered[upper] * weight
+    }
+}
