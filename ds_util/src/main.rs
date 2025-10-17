@@ -2,6 +2,7 @@
 
    Example usage:
    cargo run -- $HOME/data.parquet
+   cargo run -- $HOME/data.csv
 */
 
 use std::env;
