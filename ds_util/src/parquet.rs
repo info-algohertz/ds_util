@@ -57,6 +57,10 @@ impl DataFrame for ArrowDataFrame {
             .collect()
     }
 
+    fn read_column_i64(&self, _column_name: &str) -> Vec<i64> {
+        panic!("Not implemented.");
+    }
+
     fn read_column_f64(&self, column_name: &str) -> Vec<f64> {
         let file = File::open(&self.path)
             .unwrap_or_else(|e| panic!("failed to open parquet file '{}': {e}", self.path));
