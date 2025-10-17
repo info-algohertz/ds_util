@@ -5,63 +5,113 @@ use std::io::{BufRead, BufReader};
 
 const SEPARATOR: char = ',';
 
-pub fn read_csv(
+pub fn read_csv<S: Into<String>>(
     path: &str,
-    column_names: Option<Vec<String>>,
+    column_names: Option<Vec<S>>,
 ) -> Result<Box<dyn DataFrame>, Box<dyn std::error::Error>> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
-
     let mut lines = reader.lines();
 
-    // Determine headers
-    let mut headers: Vec<String> = if let Some(mut cols) = column_names {
-        // Ensure each column has a name; fill empties and make unique
-        normalize_headers(&mut cols);
-        cols
+    // --- derive headers ---
+    let mut headers: Vec<String> = if let Some(cols) = column_names {
+        // Convert &str or String into owned Strings
+        let mut h: Vec<String> = cols.into_iter().map(Into::into).collect();
+
+        // Ensure non-empty
+        for (i, name) in h.iter_mut().enumerate() {
+            if name.trim().is_empty() {
+                *name = format!("col{}", i + 1);
+            }
+        }
+
+        // Ensure uniqueness by suffixing duplicates
+        let mut seen = HashSet::new();
+        for i in 0..h.len() {
+            let base = h[i].clone();
+            if seen.insert(base.clone()) {
+                continue;
+            }
+            let mut k = 2usize;
+            loop {
+                let cand = format!("{}_{}", base, k);
+                if seen.insert(cand.clone()) {
+                    h[i] = cand;
+                    break;
+                }
+                k += 1;
+            }
+        }
+        h
     } else {
-        // Take first line as header
-        let first = lines.next().ok_or("CSV is empty; cannot read header")??;
-        let mut cols: Vec<String> = split_csv_line(&first);
-        normalize_headers(&mut cols);
-        cols
+        // Read the first line as header
+        let first_line = lines
+            .next()
+            .ok_or("CSV is empty; cannot read header")??;
+        let mut h: Vec<String> = first_line
+            .split(SEPARATOR)
+            .map(|s| s.trim().to_string())
+            .collect();
+
+        // Ensure non-empty and unique
+        for (i, name) in h.iter_mut().enumerate() {
+            if name.trim().is_empty() {
+                *name = format!("col{}", i + 1);
+            }
+        }
+        let mut seen = HashSet::new();
+        for i in 0..h.len() {
+            let base = h[i].clone();
+            if seen.insert(base.clone()) {
+                continue;
+            }
+            let mut k = 2usize;
+            loop {
+                let cand = format!("{}_{}", base, k);
+                if seen.insert(cand.clone()) {
+                    h[i] = cand;
+                    break;
+                }
+                k += 1;
+            }
+        }
+        h
     };
 
-    // Prepare storage
-    let mut column_data: HashMap<String, Vec<String>> = HashMap::new();
-    for h in &headers {
-        column_data.insert(h.clone(), Vec::new());
-    }
+    // --- storage per column (all strings initially) ---
+    let mut column_data: HashMap<String, Vec<String>> =
+        headers.iter().cloned().map(|h| (h, Vec::new())).collect();
 
-    // Read all rows as strings
+    // --- read remaining lines ---
     for line_res in lines {
         let line = line_res?;
-        // Skip empty lines (common in CSVs)
         if line.trim().is_empty() {
             continue;
         }
-        let mut fields = split_csv_line(&line);
 
-        // Pad / truncate to match header count
+        let mut fields: Vec<String> = line
+            .split(SEPARATOR)
+            .map(|s| s.trim().to_string())
+            .collect();
+
+        // Pad or extend if needed
         if fields.len() < headers.len() {
             fields.resize(headers.len(), String::new());
         } else if fields.len() > headers.len() {
-            // If there are extra fields, extend headers with generated names
             let extra = fields.len() - headers.len();
             for _ in 0..extra {
                 headers.push(format!("col{}", headers.len() + 1));
             }
-            normalize_headers(&mut headers);
-            // Ensure storage has new columns
-            for h in &headers {
+            // Ensure column_data has entries for any new headers
+            for h in headers.iter().skip(column_data.len()) {
                 column_data.entry(h.clone()).or_insert_with(Vec::new);
             }
         }
 
-        // Append to per-column vectors
-        for (i, value) in fields.into_iter().enumerate() {
+        // Append per-column values
+        for (i, val) in fields.into_iter().enumerate() {
             let h = &headers[i];
-            column_data.get_mut(h).unwrap().push(value);
+            column_data.get_mut(h).unwrap().push(val);
         }
     }
 
@@ -132,41 +182,6 @@ impl DataFrame for CsvDataFrame {
 }
 
 /* -------------------- helpers -------------------- */
-
-fn normalize_headers(headers: &mut Vec<String>) {
-    // Replace empty with generated names and ensure uniqueness
-    for (i, h) in headers.iter_mut().enumerate() {
-        if h.trim().is_empty() {
-            *h = format!("col{}", i + 1);
-        }
-    }
-    // De-duplicate by suffixing _2, _3, ...
-    let mut seen: HashSet<String> = HashSet::new();
-    for i in 0..headers.len() {
-        let original = headers[i].clone();
-        if seen.insert(original.clone()) {
-            continue;
-        }
-        // Need to make unique
-        let mut k = 2usize;
-        loop {
-            let candidate = format!("{}_{}", original, k);
-            if seen.insert(candidate.clone()) {
-                headers[i] = candidate;
-                break;
-            }
-            k += 1;
-        }
-    }
-}
-
-fn split_csv_line(line: &str) -> Vec<String> {
-    // Minimal CSV split: split by SEPARATOR; trim surrounding whitespace.
-    // (If you need quoted-field semantics, swap this for the `csv` crate.)
-    line.split(SEPARATOR)
-        .map(|s| s.trim().to_string())
-        .collect()
-}
 
 fn parse_i64_lossy(s: &str) -> i64 {
     // Accept blanks as 0; trim; allow underscores; strip quotes
