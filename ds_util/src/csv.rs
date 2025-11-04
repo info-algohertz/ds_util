@@ -151,6 +151,13 @@ impl DataFrame for CsvDataFrame {
         m
     }
 
+    fn read_column_string(&self, column_name: &str) -> Vec<String> {
+        match self.column_data.get(column_name) {
+            Some(col) => col.to_vec(),
+            None => panic!("Column '{}' not found", column_name),
+        }
+    }
+
     fn read_column_i64(&self, column_name: &str) -> Vec<i64> {
         match self.column_data.get(column_name) {
             Some(col) => col.iter().map(|s| parse_i64_lossy(s)).collect(),

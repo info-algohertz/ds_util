@@ -57,6 +57,10 @@ impl DataFrame for ArrowDataFrame {
             .collect()
     }
 
+    fn read_column_string(&self, _column_name: &str) -> Vec<String> {
+        panic!("Not implemented.");
+    }
+
     fn read_column_i64(&self, _column_name: &str) -> Vec<i64> {
         panic!("Not implemented.");
     }
