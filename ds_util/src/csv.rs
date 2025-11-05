@@ -45,9 +45,7 @@ pub fn read_csv<S: Into<String>>(
         h
     } else {
         // Read the first line as header
-        let first_line = lines
-            .next()
-            .ok_or("CSV is empty; cannot read header")??;
+        let first_line = lines.next().ok_or("CSV is empty; cannot read header")??;
         let mut h: Vec<String> = first_line
             .split(SEPARATOR)
             .map(|s| s.trim().to_string())
