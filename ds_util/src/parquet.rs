@@ -168,9 +168,9 @@ impl DataFrame for ArrowDataFrame {
 }
 
 pub fn write_parquet(
+    file_path: &str,
     timestamps: Vec<i64>,
     data: HashMap<String, Vec<f64>>,
-    file_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Build schema: timestamp column + all data columns
     let mut fields = vec![Field::new(
