@@ -40,7 +40,7 @@ pub fn get_percentile(values: &[f64], percentile: f64) -> f64 {
     get_percentiles(values, &[percentile])[0]
 }
 
-fn get_mean(x: &Vec<f64>) -> f64 {
+pub fn get_mean(x: &Vec<f64>) -> f64 {
     // Filter out NaN values
     let valid_values: Vec<f64> = x.iter().copied().filter(|v| !v.is_nan()).collect();
 
@@ -63,7 +63,7 @@ fn get_mean(x: &Vec<f64>) -> f64 {
     mean
 }
 
-fn get_corr(x: &Vec<f64>, y: &Vec<f64>) -> f64 {
+pub fn get_corr(x: &Vec<f64>, y: &Vec<f64>) -> f64 {
     // Filter out pairs where either value is NaN
     let valid_pairs: Vec<(f64, f64)> = x
         .iter()
