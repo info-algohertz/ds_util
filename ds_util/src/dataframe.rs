@@ -12,4 +12,6 @@ pub trait DataFrame: Send + Sync {
 
     /// Read the first column (index) of type Timestamp(Microsecond, Some("UTC")) into Vec<i64>
     fn read_index_microsecond(&self) -> Vec<i64>;
+    /// Read the column "timestamp" of type Timestamp(Second, Some("UTC")) into Vec<i64>
+    fn read_timestamp_second(&self) -> Vec<i64>;
 }

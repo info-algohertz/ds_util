@@ -184,6 +184,10 @@ impl DataFrame for CsvDataFrame {
         };
         self.read_column_i64(candidate)
     }
+    
+    fn read_timestamp_second(&self) -> Vec<i64> {
+        panic!("Not implemented.");
+    }
 }
 
 /* -------------------- helpers -------------------- */

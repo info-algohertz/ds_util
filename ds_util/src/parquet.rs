@@ -196,6 +196,70 @@ impl DataFrame for ArrowDataFrame {
 
         values
     }
+    
+    fn read_timestamp_second(&self) -> Vec<i64> {
+        use arrow::array::TimestampSecondArray;
+        use arrow::datatypes::{DataType, TimeUnit};
+
+        const TIMESTAMP_COL: &str = "timestamp";
+
+        let file = File::open(&self.path)
+            .unwrap_or_else(|e| panic!("failed to open parquet file '{}': {e}", self.path));
+
+        let builder = ParquetRecordBatchReaderBuilder::try_new(file)
+            .unwrap_or_else(|e| panic!("failed to build parquet reader: {e}"));
+        let mut reader = builder
+            .build()
+            .unwrap_or_else(|e| panic!("failed to build record batch reader: {e}"));
+
+        let mut values: Vec<i64> = Vec::with_capacity(self.row_count);
+        let mut global_row: usize = 0;
+
+        while let Some(batch_res) = reader.next() {
+            let batch = batch_res.unwrap_or_else(|e| panic!("error reading batch: {e}"));
+
+            let schema = batch.schema();
+            let idx = schema
+                .index_of(TIMESTAMP_COL)
+                .unwrap_or_else(|_| panic!("timestamp column '{}' not found", TIMESTAMP_COL));
+
+            // Validate dtype once per batch
+            let field = schema.field(idx);
+            match field.data_type() {
+                DataType::Timestamp(TimeUnit::Second, tz) if tz.as_deref() == Some("UTC") => {}
+                other => panic!(
+                    "timestamp column '{}' has dtype {:?}, expected Timestamp(Second, Some(\"UTC\"))",
+                    TIMESTAMP_COL, other
+                ),
+            }
+
+            let col = batch
+                .column(idx)
+                .as_any()
+                .downcast_ref::<TimestampSecondArray>()
+                .unwrap_or_else(|| {
+                    panic!(
+                        "timestamp column '{}' is not a TimestampSecondArray",
+                        TIMESTAMP_COL
+                    )
+                });
+
+            for (j, opt) in col.iter().enumerate() {
+                let ts = opt.unwrap_or_else(|| {
+                    panic!(
+                        "timestamp column '{}' contains a NULL at row {}",
+                        TIMESTAMP_COL,
+                        global_row + j
+                    )
+                });
+                values.push(ts);
+            }
+
+            global_row += col.len();
+        }
+
+        values
+    }
 }
 
 pub fn write_parquet(
