@@ -65,8 +65,39 @@ impl DataFrame for ArrowDataFrame {
         panic!("Not implemented.");
     }
 
-    fn read_column_i64(&self, _column_name: &str) -> Vec<i64> {
-        panic!("Not implemented.");
+    fn read_column_i64(&self, column_name: &str) -> Vec<i64> {
+        use arrow::array::Int64Array;
+
+        let file = File::open(&self.path)
+            .unwrap_or_else(|e| panic!("failed to open parquet file '{}': {e}", self.path));
+        let builder = ParquetRecordBatchReaderBuilder::try_new(file)
+            .unwrap_or_else(|e| panic!("failed to build parquet reader: {e}"));
+        let mut reader = builder
+            .build()
+            .unwrap_or_else(|e| panic!("failed to build record batch reader: {e}"));
+
+        let mut values: Vec<i64> = Vec::with_capacity(self.row_count);
+
+        while let Some(batch_res) = reader.next() {
+            let batch = batch_res.unwrap_or_else(|e| panic!("error reading batch: {e}"));
+
+            let idx = batch
+                .schema()
+                .index_of(column_name)
+                .unwrap_or_else(|_| panic!("column '{}' not found in batch", column_name));
+
+            let col = batch
+                .column(idx)
+                .as_any()
+                .downcast_ref::<Int64Array>()
+                .unwrap_or_else(|| panic!("column '{}' is not Int64", column_name));
+
+            for opt in col.iter() {
+                values.push(opt.unwrap_or(0));
+            }
+        }
+
+        values
     }
 
     fn read_column_f64(&self, column_name: &str) -> Vec<f64> {
