@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     data.insert("temperature".to_string(), vec![20.5, 21.3, 19.8]);
     data.insert("humidity".to_string(), vec![65.0, 68.5, 70.2]);
 
-    ds_util::write_parquet(output_parquet_path, timestamps, data)?;
+    ds_util::write_parquet(output_parquet_path, Some(timestamps), data)?;
 
     println!("Data written to the output parquet file successfully!");
 

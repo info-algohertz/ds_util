@@ -169,15 +169,23 @@ impl DataFrame for ArrowDataFrame {
 
 pub fn write_parquet(
     file_path: &str,
-    timestamps: Vec<i64>,
+    timestamps: Option<Vec<i64>>,
     data: HashMap<String, Vec<f64>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Build schema: timestamp column + all data columns
-    let mut fields = vec![Field::new(
-        "timestamp",
-        DataType::Timestamp(TimeUnit::Second, Some("UTC".into())),
-        false,
-    )];
+    let mut fields = Vec::new();
+    let mut columns: Vec<ArrayRef> = Vec::new();
+
+    // Add timestamp column only if provided
+    if let Some(ts) = &timestamps {
+        fields.push(Field::new(
+            "timestamp",
+            DataType::Timestamp(TimeUnit::Second, Some("UTC".into())),
+            false,
+        ));
+        columns.push(Arc::new(
+            TimestampSecondArray::from(ts.clone()).with_timezone("UTC"),
+        ));
+    }
 
     // Add fields for each column in the HashMap
     for key in data.keys() {
@@ -186,16 +194,9 @@ pub fn write_parquet(
 
     let schema = Arc::new(Schema::new(fields));
 
-    // Create arrays for each column
-    let mut columns: Vec<ArrayRef> = Vec::new();
-
-    // Add timestamp column (with UTC timezone)
-    columns.push(Arc::new(
-        TimestampSecondArray::from(timestamps).with_timezone("UTC"),
-    ));
-
-    // Add data columns in the same order as schema
-    for field in schema.fields().iter().skip(1) {
+    // Add data columns in the same order as schema (skip timestamp if present)
+    let skip_count = if timestamps.is_some() { 1 } else { 0 };
+    for field in schema.fields().iter().skip(skip_count) {
         let data = data.get(field.name()).unwrap();
         columns.push(Arc::new(Float64Array::from(data.clone())));
     }
@@ -207,7 +208,6 @@ pub fn write_parquet(
     let file = File::create(file_path)?;
     let props = WriterProperties::builder().build();
     let mut writer = ArrowWriter::try_new(file, schema, Some(props))?;
-
     writer.write(&batch)?;
     writer.close()?;
 

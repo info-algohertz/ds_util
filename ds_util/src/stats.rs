@@ -114,4 +114,3 @@ pub fn get_corr(x: &Vec<f64>, y: &Vec<f64>) -> f64 {
     // Clamp to [-1, 1] to handle numerical errors
     correlation.clamp(-1.0, 1.0)
 }
-
