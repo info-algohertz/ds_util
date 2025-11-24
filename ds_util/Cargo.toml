@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 arrow = "57"
 parquet = "57"
+alphanumeric-sort = "1.5"

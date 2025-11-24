@@ -269,7 +269,7 @@ pub fn write_parquet(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut fields = Vec::new();
     let mut columns: Vec<ArrayRef> = Vec::new();
-
+    
     // Add timestamp column only if provided
     if let Some(ts) = &timestamps {
         fields.push(Field::new(
@@ -281,30 +281,36 @@ pub fn write_parquet(
             TimestampSecondArray::from(ts.clone()).with_timezone("UTC"),
         ));
     }
-
-    // Add fields for each column in the HashMap
-    for key in data.keys() {
-        fields.push(Field::new(key, DataType::Float64, false));
+    
+    // Sort keys alphanumerically
+    let mut sorted_keys: Vec<&String> = data.keys().collect();
+    sorted_keys.sort_by(|a, b| {
+        alphanumeric_sort::compare_str(a, b)
+    });
+    
+    // Add fields for each column in sorted order
+    for key in &sorted_keys {
+        fields.push(Field::new(key.as_str(), DataType::Float64, false));
     }
-
+    
     let schema = Arc::new(Schema::new(fields));
-
+    
     // Add data columns in the same order as schema (skip timestamp if present)
     let skip_count = if timestamps.is_some() { 1 } else { 0 };
     for field in schema.fields().iter().skip(skip_count) {
         let data = data.get(field.name()).unwrap();
         columns.push(Arc::new(Float64Array::from(data.clone())));
     }
-
+    
     // Create record batch
     let batch = RecordBatch::try_new(schema.clone(), columns)?;
-
+    
     // Write to parquet file
     let file = File::create(file_path)?;
     let props = WriterProperties::builder().build();
     let mut writer = ArrowWriter::try_new(file, schema, Some(props))?;
     writer.write(&batch)?;
     writer.close()?;
-
+    
     Ok(())
 }

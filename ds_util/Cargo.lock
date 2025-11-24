@@ -47,6 +47,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "alphanumeric-sort"
+version = "1.5.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab31f79a61d3c25cae1d6734a386662e5cf1b6ba5a9720c135b609273c058c15"
+
+[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -430,6 +436,7 @@ dependencies = [
 name = "ds_util"
 version = "0.1.0"
 dependencies = [
+ "alphanumeric-sort",
  "arrow",
  "parquet",
 ]
