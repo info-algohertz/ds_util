@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::sync::Arc;
 
-use arrow::array::{Array, ArrayRef, Float64Array, TimestampSecondArray};
+use arrow::array::{Array, ArrayRef, Float64Array, Int64Array, TimestampSecondArray};
 use arrow::datatypes::{DataType, Field, Schema, SchemaRef, TimeUnit};
 use arrow::record_batch::RecordBatch;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
@@ -196,7 +196,7 @@ impl DataFrame for ArrowDataFrame {
 
         values
     }
-    
+
     fn read_timestamp_second(&self) -> Vec<i64> {
         use arrow::array::TimestampSecondArray;
         use arrow::datatypes::{DataType, TimeUnit};
@@ -265,11 +265,12 @@ impl DataFrame for ArrowDataFrame {
 pub fn write_parquet(
     file_path: &str,
     timestamps: Option<Vec<i64>>,
-    data: HashMap<String, Vec<f64>>,
+    int_data: Option<HashMap<String, Vec<i64>>>,
+    float_data: Option<HashMap<String, Vec<f64>>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut fields = Vec::new();
     let mut columns: Vec<ArrayRef> = Vec::new();
-    
+
     // Add timestamp column only if provided
     if let Some(ts) = &timestamps {
         fields.push(Field::new(
@@ -281,36 +282,54 @@ pub fn write_parquet(
             TimestampSecondArray::from(ts.clone()).with_timezone("UTC"),
         ));
     }
-    
-    // Sort keys alphanumerically
-    let mut sorted_keys: Vec<&String> = data.keys().collect();
-    sorted_keys.sort_by(|a, b| {
-        alphanumeric_sort::compare_str(a, b)
-    });
-    
-    // Add fields for each column in sorted order
-    for key in &sorted_keys {
-        fields.push(Field::new(key.as_str(), DataType::Float64, false));
+
+    // Collect and sort all column names together for consistent ordering
+    let int_data = int_data.unwrap_or_default();
+    let float_data = float_data.unwrap_or_default();
+
+    // Build a unified list of (name, type) pairs
+    let mut column_info: Vec<(&String, bool)> = Vec::new(); // (name, is_int)
+    for key in int_data.keys() {
+        column_info.push((key, true));
     }
-    
+    for key in float_data.keys() {
+        column_info.push((key, false));
+    }
+
+    // Sort alphanumerically by column name
+    column_info.sort_by(|a, b| alphanumeric_sort::compare_str(a.0, b.0));
+
+    // Add fields and columns in sorted order
+    for (name, is_int) in &column_info {
+        if *is_int {
+            fields.push(Field::new(name.as_str(), DataType::Int64, false));
+        } else {
+            fields.push(Field::new(name.as_str(), DataType::Float64, false));
+        }
+    }
+
     let schema = Arc::new(Schema::new(fields));
-    
-    // Add data columns in the same order as schema (skip timestamp if present)
-    let skip_count = if timestamps.is_some() { 1 } else { 0 };
-    for field in schema.fields().iter().skip(skip_count) {
-        let data = data.get(field.name()).unwrap();
-        columns.push(Arc::new(Float64Array::from(data.clone())));
+
+    // Add data columns in the same sorted order
+    for (name, is_int) in &column_info {
+        if *is_int {
+            let data = int_data.get(*name).unwrap();
+            columns.push(Arc::new(Int64Array::from(data.clone())));
+        } else {
+            let data = float_data.get(*name).unwrap();
+            columns.push(Arc::new(Float64Array::from(data.clone())));
+        }
     }
-    
+
     // Create record batch
     let batch = RecordBatch::try_new(schema.clone(), columns)?;
-    
+
     // Write to parquet file
     let file = File::create(file_path)?;
     let props = WriterProperties::builder().build();
     let mut writer = ArrowWriter::try_new(file, schema, Some(props))?;
     writer.write(&batch)?;
     writer.close()?;
-    
+
     Ok(())
 }

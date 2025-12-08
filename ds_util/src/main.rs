@@ -27,11 +27,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Write out to a parquet file.
     let timestamps = vec![1609459200000, 1609545600000, 1609632000000];
 
+    let mut int_data = HashMap::new();
+    int_data.insert("index".to_string(), vec![1, 2, 3]);
+
     let mut data = HashMap::new();
     data.insert("temperature".to_string(), vec![20.5, 21.3, 19.8]);
     data.insert("humidity".to_string(), vec![65.0, 68.5, 70.2]);
 
-    ds_util::write_parquet(output_parquet_path, Some(timestamps), data)?;
+    ds_util::write_parquet(
+        output_parquet_path,
+        Some(timestamps),
+        Some(int_data),
+        Some(data),
+    )?;
 
     println!("Data written to the output parquet file successfully!");
 
