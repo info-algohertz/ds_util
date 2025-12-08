@@ -39,6 +39,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(timestamps),
         Some(int_data),
         Some(data),
+        None,
     )?;
 
     println!("Data written to the output parquet file successfully!");

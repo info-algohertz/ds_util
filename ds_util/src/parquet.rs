@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::sync::Arc;
 
-use arrow::array::{Array, ArrayRef, Float64Array, Int64Array, TimestampSecondArray};
+use arrow::array::{Array, ArrayRef, Float64Array, Int64Array, StringArray, TimestampSecondArray};
 use arrow::datatypes::{DataType, Field, Schema, SchemaRef, TimeUnit};
 use arrow::record_batch::RecordBatch;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
@@ -267,6 +267,7 @@ pub fn write_parquet(
     timestamps: Option<Vec<i64>>,
     int_data: Option<HashMap<String, Vec<i64>>>,
     float_data: Option<HashMap<String, Vec<f64>>>,
+    string_data: Option<HashMap<String, Vec<String>>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut fields = Vec::new();
     let mut columns: Vec<ArrayRef> = Vec::new();
@@ -283,42 +284,62 @@ pub fn write_parquet(
         ));
     }
 
-    // Collect and sort all column names together for consistent ordering
+    // Unwrap options with defaults
     let int_data = int_data.unwrap_or_default();
     let float_data = float_data.unwrap_or_default();
+    let string_data = string_data.unwrap_or_default();
+
+    // Enum to track column type
+    enum ColumnType {
+        Int64,
+        Float64,
+        String,
+    }
 
     // Build a unified list of (name, type) pairs
-    let mut column_info: Vec<(&String, bool)> = Vec::new(); // (name, is_int)
+    let mut column_info: Vec<(&String, ColumnType)> = Vec::new();
     for key in int_data.keys() {
-        column_info.push((key, true));
+        column_info.push((key, ColumnType::Int64));
     }
     for key in float_data.keys() {
-        column_info.push((key, false));
+        column_info.push((key, ColumnType::Float64));
+    }
+    for key in string_data.keys() {
+        column_info.push((key, ColumnType::String));
     }
 
     // Sort alphanumerically by column name
     column_info.sort_by(|a, b| alphanumeric_sort::compare_str(a.0, b.0));
 
-    // Add fields and columns in sorted order
-    for (name, is_int) in &column_info {
-        if *is_int {
-            fields.push(Field::new(name.as_str(), DataType::Int64, false));
-        } else {
-            fields.push(Field::new(name.as_str(), DataType::Float64, false));
-        }
+    // Add fields in sorted order
+    for (name, col_type) in &column_info {
+        let data_type = match col_type {
+            ColumnType::Int64 => DataType::Int64,
+            ColumnType::Float64 => DataType::Float64,
+            ColumnType::String => DataType::Utf8,
+        };
+        fields.push(Field::new(name.as_str(), data_type, false));
     }
 
     let schema = Arc::new(Schema::new(fields));
 
     // Add data columns in the same sorted order
-    for (name, is_int) in &column_info {
-        if *is_int {
-            let data = int_data.get(*name).unwrap();
-            columns.push(Arc::new(Int64Array::from(data.clone())));
-        } else {
-            let data = float_data.get(*name).unwrap();
-            columns.push(Arc::new(Float64Array::from(data.clone())));
-        }
+    for (name, col_type) in &column_info {
+        let array: ArrayRef = match col_type {
+            ColumnType::Int64 => {
+                let data = int_data.get(*name).unwrap();
+                Arc::new(Int64Array::from(data.clone()))
+            }
+            ColumnType::Float64 => {
+                let data = float_data.get(*name).unwrap();
+                Arc::new(Float64Array::from(data.clone()))
+            }
+            ColumnType::String => {
+                let data = string_data.get(*name).unwrap();
+                Arc::new(StringArray::from(data.clone()))
+            }
+        };
+        columns.push(array);
     }
 
     // Create record batch
